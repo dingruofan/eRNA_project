@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#######################################################################
+
+#获得每个组织的isspe_enh到文件./enh_find/enh_loc_type_isspe
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney )
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  #首先获得每个组织的enh,通过处理 /home/ding/all_cmd/script/enh_statistics/enh_all_count_spe文件：
+  awk -v tissue=$i 'BEGIN{OFS="\t";tissue_id=-1}{ if(NR==1){for(i=1;i<=NF;i++){if($i==tissue){tissue_id=i}}} if(NR>1&&$tissue_id==1){print $1,$2,$3,$4,$16,$17}  }' /home/ding/all_cmd/script/enh_statistics/enh_all_count_spe|sortBed -i - >./enh_find/enh_loc_type_isspe
+
+  echo $i"完成1"
+done
+
+#使用enh_GO2.R分析：
+#获得每个组织的enh的bed4格式到bed文件：
+cd /home/ding/all_cmd/script/enh_statistics
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  awk -v tissue=$i 'BEGIN{OFS="\t"}{if($NF==tissue){print $1,$2,$3,$4}}' enh_all_count_spe_melt|sortBed -i - >./GO/$i".bed4"
+  echo $i"完成"
+done
+
+
+
+
+
+
+

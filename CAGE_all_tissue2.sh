@@ -1,0 +1,147 @@
+#!/bin/bash
+#######################################################################
+#处理10个组织的CAGE，即合并TCs后进行分析双向转录：
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE
+#修改enhancer参数，TCs之间的最大距离为1个则进行聚类，-g .表达量使用bedtools的coverageBed重新计算。
+/home/ding/tool/enhancers-master/scripts/bidir_enhancers -d 0.8 -g 400 -f ../ctss.path -o ./cage_enh_test  
+
+
+##################################################################################
+#计算每个TCs后面400bp内的CAGE tags覆盖情况，做为表达量，注意正负链。
+
+#获得CTSS的bam文件：
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/fantom/$i"_CAGE"
+  #获得所有的ctss：
+  awk 'BEGIN{OFS="\t"} { a[NR]=$5;b[NR]=$0; }END{ for(i=1;i<=length(a);i++){ for(j=1;j<=a[i];j++){print b[i]} } }' ./ctss.bed >./ctss_all.bed
+  sortBed -i ./ctss_all.bed >./ctss_all_sorted.bed
+  #转为bam文件：
+  bedToBam -i ./ctss_all.bed -g ../../hg19.chrom.sizes >./ctss_all.bam
+  samtools sort ./ctss_all.bam -o ./ctss_all_sorted.bam
+  samtools index ./ctss_all_sorted.bam ./ctss_all_sorted.bam.bai
+  echo $i"完成1"
+  rm ./ctss_all.bed
+done
+
+
+#计算TCs的表达量：
+#先将TCs排序后进行扩大为400bp：
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+sortBed -i ./TCs.bed | awk 'BEGIN{FS="\t";OFS="\t"}{if($1=="chrM")next; if($6=="+"){print $1,$2,$2+400,$4,".",$6} if($6=="-"){print $1,$3-400,$3,$4,".",$6} }' - >./TCs_sorted_400.bed
+#计算每个组织的表达量并构建表达量矩阵：
+#先构建表达量文件：TCs_sorted_exp_count.matrix
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+awk 'BEGIN{FS="\t";OFS="\t";print "genome_location"}{print $4}' ./TCs_sorted_400.bed >./TCs_sorted_exp_count.matrix
+
+#计算各个组织的表达量count:
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do 
+  #使用coverageBed获得所有TCs后400bp的表达量：
+  cd /media/ding/000B49000006264C/eRNA_project/fantom/$i"_CAGE"
+  coverageBed -s -abam ./ctss_all_sorted.bam  -b ../All_tissue_CAGE/cage_enh/TCs_sorted_400.bed |awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ if(NR==FNR){a[$4]=$7} if(NR>FNR&&FNR==1){print $0,tissue} if(NR>FNR&&FNR>1){print $0,a[$1]} }' - ../All_tissue_CAGE/cage_enh/TCs_sorted_exp_count.matrix > ../All_tissue_CAGE/cage_enh/a
+  cp ../All_tissue_CAGE/cage_enh/a ../All_tissue_CAGE/cage_enh/TCs_sorted_exp_count.matrix
+  echo $i"完成2"
+done
+rm ../All_tissue_CAGE/cage_enh/a
+#将count_matrix转为TPM矩阵：
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+awk 'BEGIN{FS="\t";OFS="\t"}{ if(NR==FNR){a[NR]=$1} if(NR>FNR&&FNR==1){print $0} if(NR>FNR&&FNR>1){print $1,$2*10^6/a[1],$3*10^6/a[2],$4*10^6/a[3],$5*10^6/a[4],$6*10^6/a[5],$7*10^6/a[6],$8*10^6/a[7],$9*10^6/a[8],$10*10^6/a[8],$11*10^6/a[10]} }' ./library.counts.txt ./TCs_sorted_exp_count.matrix > ./TCs_sorted_exp_TPM.matrix
+
+
+#######################
+#计算双向转录的表达量：
+#用bedtools的bed12ToBed6将双向的转为bed6,并扩大400bp。注意正负链的区别：
+#处理双端转录的Matrix，注意这里用的是后来通过使用coverageBed统计表达量生成的矩阵
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE
+bed12ToBed6 -i ./cage_enh/bidir.pairs.bed | awk 'BEGIN{OFS="\t";} {if($1=="chrM")next; if(NR%2==1){print $1,$3-400,$3,$4",-",$5,"-"} if(NR%2==0){print $1,$2,$2+400,$4",+",$5,"+"} } ' - |sortBed -i - >./cage_enh/bidir_pairs_sorted.bed6
+
+###############
+#注意：这部分是后来添加的，为了输出到数据库和文章附件，不扩大400bp，对其他无影响：
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE
+bed12ToBed6 -i ./cage_enh/bidir.pairs.bed | awk 'BEGIN{OFS="\t";} {if($1=="chrM")next; if(NR%2==1){print $1,$2,$3,$4",-",$5,"-"} if(NR%2==0){print $1,$2,$3,$4",+",$5,"+"} } ' - |sortBed -i - >./cage_enh/bidir_pairs_sorted.bed6_additional
+################
+
+#计算每个组织的表达量并构建表达量矩阵：
+#先构建表达量文件：bidir_pairs_expression_count.matrix
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+awk 'BEGIN{FS="\t";OFS="\t";print "genome_location"}{print $4}' ./bidir_pairs_sorted.bed6 >./bidir_pairs_expression_count.matrix
+#计算各个组织的表达量count:
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do 
+  #使用coverageBed获得所有转录起始位点后400bp的表达量：
+  cd /media/ding/000B49000006264C/eRNA_project/fantom/$i"_CAGE"
+  coverageBed -s -abam ./ctss_all_sorted.bam  -b ../All_tissue_CAGE/cage_enh/bidir_pairs_sorted.bed6 |awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ if(NR==FNR){a[$4]=$7} if(NR>FNR&&FNR==1){print $0,tissue} if(NR>FNR&&FNR>1){print $0,a[$1]} }' - ../All_tissue_CAGE/cage_enh/bidir_pairs_expression_count.matrix > ../All_tissue_CAGE/cage_enh/a
+  cp ../All_tissue_CAGE/cage_enh/a ../All_tissue_CAGE/cage_enh/bidir_pairs_expression_count.matrix
+  echo $i"完成3"
+done
+rm ../All_tissue_CAGE/cage_enh/a
+#将count_matrix转为TPM矩阵：
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+awk 'BEGIN{FS="\t";OFS="\t"}{ if(NR==FNR){a[NR]=$1} if(NR>FNR&&FNR==1){print $0} if(NR>FNR&&FNR>1){print $1,$2*10^6/a[1],$3*10^6/a[2],$4*10^6/a[3],$5*10^6/a[4],$6*10^6/a[5],$7*10^6/a[6],$8*10^6/a[7],$9*10^6/a[8],$10*10^6/a[8],$11*10^6/a[10]} }' ./library.counts.txt ./bidir_pairs_expression_count.matrix > ./bidir_pairs_expression_TPM.matrix
+
+
+
+
+
+###############################################################################
+#将bidir.pairs.bed提取到每一个组织中，表达量所对列分别是：2-11
+#第五列为双向转录的表达量，以逗号分割，第一个是负链的，第二个是正链的。
+#cage_enh/bidir_pairs_expression_TPM.matrix和./cage_enh/bidir.pairs.bed
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE
+for i in ${tissue[@]}
+do
+  awk -v tissue="$i" 'BEGIN{ j=0 ;OFS="\t"} { if(NR==1){for(i=1;i<=NF;i++){if($i==tissue){j=i}} next} if(NR==FNR&&NR>1&&$j!=0){a[$1]=$j} if((NR>FNR)&&($4",+" in a)&&($4",-" in a)&&(a[$4",-"]>0)&&(a[$4",+"]>0)){print $1,$2,$3,$4,a[$4",-"]","a[$4",+"],$6,$7,$8,$9,$10,$11,$12} }' ./cage_enh/bidir_pairs_expression_TPM.matrix ./cage_enh/bidir.pairs.bed > ../$i"_CAGE"/cage_enh/bidir.pairs.bed
+done
+
+
+#处理单端转录的Matrix，并将TCs.bed提取到每一个组织中：
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE
+for i in ${tissue[@]}
+do
+  awk -v tissue="$i" 'BEGIN{ j=0 } { if(NR==1){for(i=1;i<=NF;i++){if($i==tissue){j=i}} next} if(NR==FNR&&NR>1&&$j!=0){a[$1]=$j} if(NR>FNR&&($4 in a)){print $1"\t"$2"\t"$3"\t"$4"\t"a[$4]"\t"$6} }' ./cage_enh/TCs_sorted_exp_TPM.matrix ./cage_enh/TCs_sorted.bed > ../$i"_CAGE"/cage_enh/TCs.bed
+done 
+
+
+#进行排序和去掉基因内的TCs和bidir.pairs。
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do
+  cd /media/ding/000B49000006264C/eRNA_project/fantom/$i"_CAGE"
+  #先进行排序：
+  sort-bed ./cage_enh/enhancers.bed>./cage_enh/enhancers_sorted.bed
+  sort-bed ./cage_enh/bidir.pairs.bed>./cage_enh/bidir.pairs_sorted.bed
+  sort-bed ./cage_enh/TCs.bed> ./cage_enh/TCs_sorted.bed
+  
+  
+  #获取双向转录的转录起始位点：#对双向转录的位点进行过滤，去掉基因内及上游1000bp的：
+  #注意拆分双向转录时可能中间区域就一个bp:
+  awk 'BEGIN{FS="\t";OFS="\t"}{ split($11,a,","); if($2+a[1]<$3-a[2]){print $1,$2+a[1],$3-a[2],$4}; if($2+a[1]==$3-a[2]){print $1,$2+a[1],$3-a[2]+1,$4} }' ./cage_enh/bidir.pairs_sorted.bed |bedops --not-element-of 1 - ../../gencode/protein_coding_gene_up1000 >./cage_enh/bidir.pairs_sorted_TSS.bed
+
+  #去掉双端转录和基因以及基因上游1000bp内包含的TCs，获得基因外单向转录的TCs
+  bedops --not-element-of 1 ./cage_enh/TCs_sorted.bed ./cage_enh/bidir.pairs_sorted.bed |bedops --not-element-of 1 - ../../gencode/protein_coding_gene_up1000 >./cage_enh/TCs_sorted_extragene.bed
+  echo $i"完成4"
+done
+
+
+#获得双向/单项转录本的合并bed12文件：enh_transcript.bed:
+cd /media/ding/000B49000006264C/eRNA_project/fantom/All_tissue_CAGE/cage_enh
+bedops --not-element-of 1  TCs_sorted.bed12 bidir.pairs_sorted.bed | awk '{print $0}' bidir.pairs_sorted.bed -|sortBed -i - >./cage_transcript.bed
+
+
+
+
+
+
+
+
+
+
+
+
+

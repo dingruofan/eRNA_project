@@ -1,0 +1,6 @@
+#!/bin/bash
+cd /home/ding/all_cmd/script/
+bwtool agg 2000:2000 ./enh_statistics/enh_spe_cluster.bed,./enh_statistics/enh_uni_cluster.bed,/media/ding/000B49000006264C/eRNA_project/gencode/protein_gene2.ss,./enh_statistics/enh_other_cluster.bed /media/ding/000B49000006264C/eRNA_project/GC/hg19.gc5Base.bw  /dev/stdout > ./enh_statistics/GC2_result.mean_signal
+
+
+

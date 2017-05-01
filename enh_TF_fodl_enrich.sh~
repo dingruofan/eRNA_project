@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#######################################################################
+#先计算bid 每个TF的TFBS数目,富集程度为TFBS/sum(TFBS)
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  awk 'BEGIN{FS="\t";OFS="\t"}{ print $10 }' ./enh_find/enh_bid_TF.bed | sort |uniq -c |awk 'BEGIN{OFS="\t";sum=0;}{ sum+=$1;a[NR]=$1;b[NR]=$1"\t"$2"\t"$3 }END{ for(i=1;i<=length(a);i++){print b[i],a[i]/sum*1000} }' - |sed 's/\t\t/\t/' - >./a
+  awk 'BEGIN{FS="\t";OFS="\t"}{ print $10 }' ./enh_find_1/enh_unbid_TF.bed | sort |uniq -c |awk 'BEGIN{OFS="\t";sum=0;}{ sum+=$1;a[NR]=$1;b[NR]=$1"\t"$2"\t"$3 }END{ for(i=1;i<=length(a);i++){print b[i],a[i]/sum*1000} }' - |sed 's/\t\t/\t/' - >./b
+  awk 'BEGIN{FS="\t";OFS="\t"}{ print $8 }' ./enh_find/enh_no_eRNA_named_TFBS_exp | sort |uniq -c |awk 'BEGIN{OFS="\t";sum=0;}{ sum+=$1;a[NR]=$1;b[NR]=$1"\t"$2"\t"$3 }END{ for(i=1;i<=length(a);i++){print b[i],a[i]/sum*1000} }' - |sed 's/\t\t/\t/' - >./c
+
+  echo $i"完成1"
+done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

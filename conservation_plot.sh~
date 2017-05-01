@@ -1,0 +1,11 @@
+#!/bin/bash
+cd /home/ding/all_cmd/script/
+n=`wc -l ./enh_statistics/enh_all_count|awk '{print $1-1}' - `
+randomBed -l 200 -n $n -seed 2 -g ../hg19.chrom_24.sizes|sortBed -i - |bedops --not-element-of 1 - /media/ding/000B49000006264C/eRNA_project/gencode/protein_coding_gene_up1000 >./enh_statistics/random_all_enh.bed
+
+bwtool agg 2000:2000 ./enh_statistics/random_all_enh.bed,./enh_statistics/enh_bid_cluster.bed,./enh_statistics/enh_unbid_cluster.bed,/media/ding/000B49000006264C/eRNA_project/gencode/protein_gene2.ss,./enh_statistics/no_eRNA_enh.bed /media/ding/000B49000006264C/eRNA_project/phastCons46/phastCons46.bw  /dev/stdout > ./enh_statistics/conservation_result.mean_signal
+
+
+
+
+

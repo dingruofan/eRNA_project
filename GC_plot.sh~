@@ -1,0 +1,18 @@
+#!/bin/bash
+#使用的是没有strand的TSS：
+cd /home/ding/all_cmd/script/
+n=`wc -l ./enh_statistics/enh_all_count|awk '{print $1-1}' - `
+randomBed -l 200 -n $n -seed 2 -g ../hg19.chrom_24.sizes|sortBed -i - |bedops --not-element-of 1 - /media/ding/000B49000006264C/eRNA_project/gencode/protein_coding_gene.bed >./enh_statistics/random_all_enh.bed
+
+bwtool agg 2000:2000 ./enh_statistics/random_all_enh.bed,./enh_statistics/enh_bid_cluster.bed,./enh_statistics/enh_unbid_cluster.bed,/media/ding/000B49000006264C/eRNA_project/gencode/protein_gene2.ss,./enh_statistics/no_eRNA_enh.bed /media/ding/000B49000006264C/eRNA_project/GC/hg19.gc5Base.bw  /dev/stdout > ./enh_statistics/GC_result.mean_signal
+
+#############################
+
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  
+
+done

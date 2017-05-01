@@ -1,0 +1,87 @@
+#!/bin/bash
+
+#######################################################################
+
+#随即基因外位点：./enh_statistics/randomBed_extra_gene.bed，获得每个组织随即基因外位点，和是每个组织所有enh数量相同
+#添加两列使格式一致：
+
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  random_num=`wc -l ./enh_find/enh_bid_exp.bed ./enh_find_1/enh_unbid_exp.bed ./enh_find/enh_no_eRNA_named.bed |awk '(NR==4){printf "%d",$1}' -` 
+  randomBed -n $random_num -g /home/ding/all_cmd/hg19.chrom_24.sizes |bedops --not-element-of - ../../gencode/protein_coding_gene |sortBed -i - |awk 'BEGIN{FS="\t";OFS="\t"}{ print $0,0,"eRNA_exp" }' - >./enh_find_1/enh_random.bed
+  echo $i"完成0"
+done
+
+#首先获得每个组织enh的靶基因，100kb内最临近的那个gene作为靶基因。
+#蛋白编码基因文件：/media/ding/000B49000006264C/eRNA_project/gencode/protein_coding_gene_sorted
+
+#数组存放10个组织,获得每个组织的eRNA的表达量及其靶基因
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  #bid
+  closest-features --closest  --delim '\t' --dist ./enh_find/enh_bid_exp.bed ../../gencode/protein_coding_gene_sorted | awk 'BEGIN{FS="\t";OFS="\t"}{ if($NF>-1000000&&$NF<1000000){print $1,$2,$3,$4,$5,$6,$8,$12,$13,$14} }' - >./enh_find/enh_bid_exp_targetgene
+  #unbid
+  closest-features --closest  --delim '\t' --dist ./enh_find_1/enh_unbid_exp.bed ../../gencode/protein_coding_gene_sorted | awk 'BEGIN{FS="\t";OFS="\t"}{ if($NF>-1000000&&$NF<1000000){print $1,$2,$3,$4,$5,$6,$8,$12,$13,$14} }' - >./enh_find_1/enh_unbid_exp_targetgene
+  #no_eRNA
+  closest-features --closest  --delim '\t' --dist ./enh_find/enh_no_eRNA_named.bed ../../gencode/protein_coding_gene_sorted | awk 'BEGIN{FS="\t";OFS="\t"}{ if($NF>-1000000&&$NF<1000000){print $1,$2,$3,$4,".","strand","eRNA_exp",$8,$9,$10} }' - >./enh_find/enh_no_eRNA_targetgene
+  #random  
+  closest-features --closest  --delim '\t' --dist ./enh_find_1/enh_random.bed ../../gencode/protein_coding_gene_sorted | awk 'BEGIN{FS="\t";OFS="\t"}{ if($NF>-1000000&&$NF<1000000){print $1,$2,$3,$4,$5,$6,$8,$12,$13,$14} }' - >./enh_find_1/enh_random_targetgene
+  echo $i"完成1"
+done
+
+#各个组织靶基因表达量，注意，只有9个组织的没有Placenta的! 
+#获得每个组织eRNA的表达量及其靶基因的表达量：
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  #bid
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t";tissue_id=100}{ if(NR==FNR&&FNR==1){for(i=1;i<=NF;i++){if($i==tissue){tissue_id=i}}} if(NR==FNR&&NR>1){a[$1]=$tissue_id} if(NR>FNR&&$9 in a){print $0,a[$9]} if((NR>FNR)&&!($9 in a)){print $0,"NA"} }' ../../GTEx/GTEx_rpkm ./enh_find/enh_bid_exp_targetgene >./enh_find/enh_bid_exp_targetgene_exp
+  #unbid
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t";tissue_id=100}{ if(NR==FNR&&FNR==1){for(i=1;i<=NF;i++){if($i==tissue){tissue_id=i}}} if(NR==FNR&&NR>1){a[$1]=$tissue_id} if(NR>FNR&&$9 in a){print $0,a[$9]} if((NR>FNR)&&!($9 in a)){print $0,"NA"} }' ../../GTEx/GTEx_rpkm ./enh_find_1/enh_unbid_exp_targetgene >./enh_find_1/enh_unbid_exp_targetgene_exp
+  #no_eRNA
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t";tissue_id=100}{ if(NR==FNR&&FNR==1){for(i=1;i<=NF;i++){if($i==tissue){tissue_id=i}}} if(NR==FNR&&NR>1){a[$1]=$tissue_id} if(NR>FNR&&$9 in a){print $0,a[$9]} if((NR>FNR)&&!($9 in a)){print $0,"NA"} }' ../../GTEx/GTEx_rpkm ./enh_find/enh_no_eRNA_targetgene >./enh_find/enh_no_eRNA_targetgene_exp
+  #random
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t";tissue_id=100}{ if(NR==FNR&&FNR==1){for(i=1;i<=NF;i++){if($i==tissue){tissue_id=i}}} if(NR==FNR&&NR>1){a[$1]=$tissue_id} if(NR>FNR&&$9 in a){print $0,a[$9]} if((NR>FNR)&&!($9 in a)){print $0,"NA"} }' ../../GTEx/GTEx_rpkm ././enh_find_1/enh_random_targetgene >./enh_find_1/enh_random_targetgene_exp
+  echo $i"完成2"
+done
+
+
+#合并9个组织的eRNA表达量和靶基因表达量到一个文件,添加type和tissue两列：
+#创建空文件：
+:>/home/ding/all_cmd/script/enh_statistics/enh_exp_targetgene_exp
+
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary SkeletalMuscle Kidney)
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do 
+  cd /media/ding/000B49000006264C/eRNA_project/histone/$i
+  #bid
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ print $0,"bid",tissue }' ./enh_find/enh_bid_exp_targetgene_exp >> /home/ding/all_cmd/script/enh_statistics/enh_exp_targetgene_exp
+  #unbid
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ print $0,"unbid",tissue }' ./enh_find_1/enh_unbid_exp_targetgene_exp >> /home/ding/all_cmd/script/enh_statistics/enh_exp_targetgene_exp
+  #no_eRNA
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ print $0,"no_eRNA",tissue }' ./enh_find/enh_no_eRNA_targetgene_exp >> /home/ding/all_cmd/script/enh_statistics/enh_exp_targetgene_exp
+  #random
+  awk -v tissue=$i 'BEGIN{FS="\t";OFS="\t"}{ print $0,"random",tissue }' ./enh_find_1/enh_random_targetgene_exp >> /home/ding/all_cmd/script/enh_statistics/enh_exp_targetgene_exp
+  echo $i"完成3"
+done
+
+
+####
+#使用R进行分析：
+
+
+
+
+
+
+
+

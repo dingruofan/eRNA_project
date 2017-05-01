@@ -1,0 +1,35 @@
+#!/bin/bash
+#######################################################################
+#CAGE的enhancer预测的enhancer周围的组蛋白特征
+#######################################################################
+/home/ding/tool/enhancers-master/scripts/bidir_enhancers -d 0.8  -f ./ctss.path -o ./cage_enh  
+
+#查看bed是否排序:(没有排序：)
+bedextract --list-chr ./cage_enh/enhancers.bed
+sort-bed ./cage_enh/enhancers.bed>./cage_enh/enhancers_sorted.bed
+sort-bed ./cage_enh/bidir.pairs.bed>./cage_enh/bidir.pairs_sorted.bed
+sort-bed ./cage_enh/TCs.bed> ./cage_enh/TCs_sorted.bed
+
+#获取双向转录的转录起始位点：#对双向转录的位点进行过滤，去掉基因内及上游1000bp的：
+awk 'BEGIN{FS="\t"}split($11,a,","){print $1"\t"$2+a[1]"\t"$3-a[2]"\t"$4}' ./cage_enh/bidir.pairs_sorted.bed |bedops --not-element-of 1 - ../../gencode/protein_coding_gene_up1000 >./cage_enh/bidir.pairs_sorted_TSS.bed
+
+#去掉双端转录和基因以及基因上游1000bp内包含的TCs，获得基因外单向转录的TCs
+bedops --not-element-of 1 ./cage_enh/TCs_sorted.bed ./cage_enh/bidir.pairs_sorted.bed |bedops --not-element-of 1 - ../../gencode/protein_coding_gene_up1000 >./cage_enh/TCs_sorted_extragene.bed
+
+#bwtool agg 1000:1000 ../../fantom/Liver_CAGE/cage_enh/enhancers_sorted.bed ./bg/H3K4me1.bw,./bg/H3K4me3.bw,./bg/H3K27ac.bw /dev/stdout > ./enh_find/result.mean_signal
+
+
+#数据库数据要求enhancer_info_melt.tsv添加每个enhancer对应的所有组织一列：
+cd /media/ding/000B49000006264C/eRNA_project/figure/table/database
+awk 'BEGIN{FS="\t";OFS="\t"}{ if(NR>1&&NR==FNR){a[$4]=$8;} if(NR>FNR&&FNR==1){print $0,"tissues"}  if(NR>FNR&&FNR>1){ print $0,a[$4] } }' ./enhancer_info.tsv ./enhancer_info_melt.tsv >./enhancer_info_melt_tissues.tsv
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#######################################################################
+#处理从tiger得到的特异性gene，合并成一个文件：
+#注意：mammary_gland用来代替breast，因为没有breast。muscle代替skeletamuscle：
+
+cd /media/ding/000B49000006264C/eRNA_project/tiger
+#创建结果文件：
+:>/home/ding/all_cmd/script/enh_statistics/TS_gene
+awk 'BEGIN{print "gene_name\ttissue"}' ./TS_gene > /home/ding/all_cmd/script/enh_statistics/TS_gene
+tissue=(Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney )
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do
+  awk -v tissue=$i 'BEGIN{OFS="\t"}{ if(NR>2){print $3,tissue} }' $i"_genes.txt"|sort -u >>/home/ding/all_cmd/script/enh_statistics/TS_gene
+  echo $i
+done 
+
+#与enh_exp_targetgene_exp（由./enh_target_gene_exp.sh产生）比较，获得enh调控的特异性的靶基因，并且靶基因的表达量>0:
+cd /home/ding/all_cmd/script/enh_statistics/
+awk 'BEGIN{OFS="\t"}{ if(NR>1&&NR==FNR){a[$1"\t"$2]} if((NR>FNR)&&($10"\t"$13 in a)&&($12!="random")&&($11>0)){print $1,$2,$3,$4,$6,$7,$8,$9,$10,$11,$12,$13} }' ./TS_gene ./enh_exp_targetgene_exp >./enh_exp_TStargetgene_exp
+
+#生成的enh_exp_TStargetgene_exp与spe_TF_enh_tissue_3（由enh_ts.sh生成）比较：
+cd /home/ding/all_cmd/script/enh_statistics/
+awk 'BEGIN{OFS="\t"}{ if(NR==FNR){a[$4"\t"$12]=$9"\t"$8} if(NR>FNR){} }' ./enh_exp_TStargetgene_exp ./spe_TF_enh_tissue_3 |sort -u |head
+
+
+
+
+
+
+
+

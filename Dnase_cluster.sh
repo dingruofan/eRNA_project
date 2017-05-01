@@ -1,0 +1,80 @@
+#!/bin/bash
+
+#首先对于9个有bigwig文件的组织的的DHS位点取信号最高的位置作为enh的中心，没有bigwig文件的取那啥，自己看代码:
+#对DHS信号进行归一花处理,信号值/sum*10^9。Adrenal
+tissue=(Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney )
+for i in ${tissue[@]}
+do
+  cd /media/ding/000B49000006264C/eRNA_project/DNase/$i
+  #bwtool summary /home/ding/all_cmd/genome_wide.bed ./new_DHS.bigWig /dev/stdout -with-sum |awk 'BEGIN{a=0}(a=a+$NF){}END{print a}' - >./new_DHS_sigsum
+  echo $i"信号sum完成"
+  #multiBigwigSummary bins --chromosomesToSkip=chrM -p=max --binSize=100 -b ./new_DHS.bigWig --labels Dnase --distanceBetweenBins=0 --outFileName=./new_DHS_bin100_npy --outRawCounts ./new_DHS_bin100.tab
+  echo $i"bin统计完成"
+  sed 's/nan/0/g' ./new_DHS_bin100.tab >./new_DHS_bin100_no_nan.tab
+  echo $i"替换NA完成"
+  new_DHS_sum=`cat ./new_DHS_sigsum`
+  awk  -v new_DHS_sum=$new_DHS_sum  'BEGIN{FS="\t";OFS="\t"}{ if(NR==1){next} print $1,$2,$3,$4*10^9/new_DHS_sum }' ./new_DHS_bin100_no_nan.tab >./new_DHS_bin100_no_nan_TPM.tab
+  echo $i"TPM归一化完成"
+  awk 'BEGIN{FS="\t";OFS="\t"}{ print  $1,$2,$3,$4}' ./new_DHS_bin100_no_nan_TPM.tab >./new_DHS_bin100_no_nan_TPM_tab.bg
+  /home/ding/tool/wigToBigWig ./new_DHS_bin100_no_nan_TPM_tab.bg /home/ding/tool/hg19.chrom.sizes  ./new_DHS_TPM.bw -clip
+  echo $i"转为bw文件完成"
+  rm ./new_DHS_bin100_no_nan.tab ./new_DHS_bin100_no_nan_TPM.tab ./new_DHS_bin100_no_nan_TPM_tab.bg
+  echo $i"_完成1"
+done 
+
+#将所有enh中心归一化到20bp，因为信号窗口为20bp:
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney )
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do
+  cd /media/ding/000B49000006264C/eRNA_project/DNase/$i
+  bwtool find maxima ./new_DHS.bed  -median-base ./new_DHS.bigWig  /dev/stdout >./a
+  echo $i"_完成1"
+done 
+
+
+
+#获得enh的中心，并将enh以原来的lengh在中心附近扩增：
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney )
+#tissue=(Adrenal)
+for i in ${tissue[@]}
+do
+  cd /media/ding/000B49000006264C/eRNA_project/DNase/$i
+  awk 'BEGIN{OFS="\t"}{ split($12,a,",");printf "%s\t%d\t%d\n",$1,$2+a[1]-($3-$2)/2,$2+a[1]+($3-$2)/2 }'  ./a |bedops --not-element-of 1 - ../../gencode/protein_coding_gene_up1000 |sortBed -i ->./Dnase_ENCODE.bed
+  #awk 'BEGIN{OFS="\t"}{print $1,$2,$3}' ./a |sortBed -i - >./Dnase_ENCODE.bed
+  #rm ./a
+  echo $i"_完成2"
+done 
+
+#先把10个组织的DHS进行merge然后再分配给各个组织：
+
+cd /media/ding/000B49000006264C/eRNA_project/DNase
+bedops --merge ./Adrenal/Dnase_ENCODE.bed ./Brain/Dnase_ENCODE.bed ./Breast/Dnase_ENCODE.bed ./Heart/Dnase_ENCODE.bed ./Liver/Dnase_ENCODE.bed ./Lung/Dnase_ENCODE.bed ./Ovary/Dnase_ENCODE.bed ./Placenta/Dnase_ENCODE.bed ./SkeletalMuscle/Dnase_ENCODE.bed ./Kidney/Dnase_ENCODE.bed >/home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed
+
+#./Adipose/Dnase_ENCODE.bed ./Pancreas/Dnase_ENCODE.bed 
+#要去除基因以及上游1000bp的DHS：
+cd /media/ding/000B49000006264C/eRNA_project/DNase
+bedops --not-element-of 1 /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ../gencode/protein_coding_gene_up1000>./a
+cp ./a /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed
+rm ./a
+
+#分配给各个组织：
+cd /media/ding/000B49000006264C/eRNA_project/DNase
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Adrenal/Dnase_ENCODE.bed >./Adrenal/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Brain/Dnase_ENCODE.bed >./Brain/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Breast/Dnase_ENCODE.bed >./Breast/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Heart/Dnase_ENCODE.bed >./Heart/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Liver/Dnase_ENCODE.bed >./Liver/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Lung/Dnase_ENCODE.bed >./Lung/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Ovary/Dnase_ENCODE.bed >./Ovary/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Placenta/Dnase_ENCODE.bed >./Placenta/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./SkeletalMuscle/Dnase_ENCODE.bed >./SkeletalMuscle/Dnase_ENCODE_cluster.bed
+bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Kidney/Dnase_ENCODE.bed >./Kidney/Dnase_ENCODE_cluster.bed
+#bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Adipose/Dnase_ENCODE.bed >./Adipose/Dnase_ENCODE_cluster.bed
+#bedops --element-of 1  /home/ding/all_cmd/script/enh_statistics/Dnase_cluster.bed ./Pancreas/Dnase_ENCODE.bed >./Pancreas/Dnase_ENCODE_cluster.bed
+
+echo "*********************************************"
+echo -e "\tDHS 聚类 OK!"
+echo "*********************************************"
+
+

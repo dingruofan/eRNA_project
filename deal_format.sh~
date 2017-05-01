@@ -1,0 +1,59 @@
+
+#获得各个组织的增强子的bed4文件，为igv输入。
+cd /home/ding/all_cmd/script/enh_statistics
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do 
+  awk -v tissue=$i 'BEGIN{OFS="\t"}{ if(NR>1&&$NF==tissue){print $1,$2,$3,$4} }' enh_all_count_spe_melt >/media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i"_enh.bed"
+  echo $i"完成"
+done
+
+#获得各个组织的IGV要提取的范围：上下游10000bp:
+#IGV session的xml文件先建立一个组织的，然后替换组织名，批量修改。
+
+tissue=(Adrenal Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do 
+  #设置要使用igv提取的范围：上下游10kb:
+  cd /home/ding/all_cmd/script/enh_statistics
+  awk -v tissue=$i 'BEGIN{OFS="\t"}{ if(NR>1&&$NF==tissue){print $1,$2-10000,$3+10000,$4} }' enh_all_count_spe_melt >/media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i"_enh_interval.bed"
+  
+  #使用bedToIgv获得每个增强子附近的修饰特征。
+  cd  /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv
+  bedToIgv -i /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i"_enh_interval.bed"   -sess /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i".xml" -path /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i -name  >/media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i".igv.batch"
+  
+  #对于每个batch的图片名称进行修改，去掉位置，只保留enh_1.png类似的文件名。
+  cd  /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv
+  awk 'BEGIN{OFS=" "}{ if(NR<=2){print } if(NR>2&&NR%2!=0){print } if(NR>2&&NR%2==0){split($2,a,"_");print $1,a[4]"_"a[5]} }' /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i".igv.batch">./a
+  cp ./a /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv/$i".igv.batch"
+  echo $i"完成"
+  rm ./a
+done
+
+
+#再次注意：先设置的是Adrenal的igv session:
+#先设置好Adrenal的IGV session的xml文件，然后批量生成各个组织的xml文件，然后替换组织。
+cd  /media/ding/000B49000006264C/eRNA_project/figure/table/for_igv
+tissue=(Brain Breast Heart Liver Lung Ovary Placenta SkeletalMuscle Kidney)
+for i in ${tissue[@]}
+do
+  #全部拷贝： 
+  cp ./Adrenal.xml ./$i".xml"
+  #各自替换
+  sed -i 's/Adrenal/'"$i"'/g' ./$i".xml"
+  echo $i"完成" 
+done
+
+
+#生成组织特异性的调控数据：作为数据库ts搜素原始文件：
+#数据来源:TS_enh_TF_targetgene_3  没有将TF和gene同名的基因修改为gene_
+awk 'BEGIN{OFS="\t";print "enh_name","isbid","TF","tissue","gene_name","TF_exp","gene_TS_score","TF_TS_score"}{ print $0 }' /home/ding/all_cmd/script/enh_statistics/TS_enh_TF_targetgene_3 > /media/ding/000B49000006264C/eRNA_project/figure/table/database/TS_enh_TF_targetgene_3
+
+
+#修改生成特异性网络的联动菜单.js文件
+awk '' /home/ding/all_cmd/script/enh_statistics/TS_enh_TF_targetgene_3
+
+
+
+
+
